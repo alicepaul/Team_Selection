@@ -1,0 +1,52 @@
+student_anon.csv
+
+'Full Name (Last, First)'   Random letters
+'Section Course Number'
+'Section Number',
+'Section Session Code'
+'Section Year'
+'ID Number'                Hashed student ID
+'First Name'               Random letters
+'Last Name',               Random letters
+'Gender Code'              Shuffled
+'Cumulative GPA'           Added random noise
+'Major 1 Code'             Major of record (not always up to date)
+'Concentration 1 Code'     More specific major code, dropped
+'Citizenship Description'  Dropped
+'Visa Description'         Dropped
+'EML1'                     Email address, dropped
+
+
+survey_anon.csv
+id:               Dropped
+project [1]:      Project preferences 1 = No
+project [2]:                          2 = No
+project [3]:                          3 = OK
+project [4]:                          4 = Good match
+project [5]:                          5 = First choice
+project [6]:
+project [7]:
+project [8]:
+project [9]:
+project [10]:
+project [11]:
+project [12]:
+project [13]:
+project [14]:
+bullets [1]:
+bullets [2]:
+role [1]:         Desired role on team
+role [2]:
+role [3]:
+role [4]:
+skills [MS]:      Skills: Machine shop
+skills [MD]:              Mechanical design
+skills [P]:               Programming
+skills [ECE]:             Electrical engineering
+skills [MM]:              Mathematical modeling
+skills [UOD]:             User oriented design
+major:                Major (according to student), dropped
+major [comment]:      More info on major (dropped)
+comments:             Dropped
+Email address:        Dropped
+Token:                Hashed student ID
