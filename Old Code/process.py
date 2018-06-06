@@ -65,11 +65,23 @@ WORTH_SAVING = 28
 PROJECT_NAMES = [
     'Name 1',
     'Name 2',
+    'Name 3',
+    'Name 4',
+    'Name 5',
+    'Name 6',
+    'Name 7',
+    'Name 8',
+    'Name 9',
+    'Name 10',
+    'Name 11',
+    'Name 12',
+    'Name 13',
+    'Name 14'
+    
 ]
 
 # projects that require US citizenship or permanent resident status
 RESTRICTED_PROJECTS = [
-    'Blue Origin',
 ]
 
 # minimum and maximum number of students per project
@@ -87,25 +99,22 @@ MAXSTAFF_EXCEPTIONS = {
 }
 
 # projects that don't need allocation
-LOCKED_PROJECT_NAMES = [
-]
+LOCKED_PROJECT_NAMES = []
 
 # students locked onto a project
-LOCKED_STUDENTS = [
-    ('Student 1', 'Name 1'),
-]
+LOCKED_STUDENTS = []
 
 # students barred from a project
-BARRED_STUDENTS = [
-    ("Student 1", 'Name 2'),
-]
+BARRED_STUDENTS = []
+#    ("Student 1", 'Name 2'),
+#]
 
 
 # TODO: implement locked and barred students without modifying
 # preferences
 
-SURVEYFILE = 'survey_anon.csv'
-STUDENTFILE = 'students_anon.csv'
+SURVEYFILE = 'Data/survey_anon.csv'
+STUDENTFILE = 'Data/students_anon.csv'
 
 CONFLICTCOST = 100
 PREFCOST = [None, 10000, 1000, 5, 1, 0]
@@ -846,6 +855,7 @@ class Survey(object):
 
         # students is a fuzzy mapping from names to student objects
         self.students = FuzzyDict(cutoff=0.6)
+        self.studentsIDs = FuzzyDict(cutoff=0.6)
 
     def parse(self, filename):
         """Reads the given file and builds the survey."""
@@ -939,6 +949,7 @@ class Survey(object):
 
             key = stu.name.lower()
             self.students[key] = stu
+            self.studentsIDs[stuid] = stu
 
         # for each project, build the mapping from preferences
         # to students.
@@ -981,7 +992,7 @@ class Survey(object):
                 if name in fixers:
                     name = fixers[name]
                 try:
-                    stu2 = self.find_student(name)
+                    stu2 = self.find_studentID(name)
                     stu.antistus.append(stu2)
                     stu2.tally += 1
                 except KeyError:
@@ -1006,6 +1017,13 @@ class Survey(object):
         stu = self.students[name]
         if stu.name != name:
             print 'Fuzzy match', name, stu.name
+        return stu
+
+    def find_studentID(self, name):
+        """Looks up a student by ID, returns Student object."""
+        stu = self.studentsIDs[name]
+        if stu.stuid != name:
+            print 'Fuzzy match', name, stu.stuid
         return stu
 
     def find_project(self, name):
@@ -1237,7 +1255,9 @@ def optimize():
 
     best = (float('Inf'), None)
 
-    while 1:
+    iters = 1
+    while iters < 10:
+        iters += 1
         # print 'generating new allocation'
         score, alloc = generate_alloc(survey, 1)
         prev = score
