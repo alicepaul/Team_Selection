@@ -1,58 +1,42 @@
 """
-
 0) Turn off DUMP_FINAL and DUMP_SWAPS
-
 1) Get students.csv from the Registrar and run
-
 python process.py tokens
-
 This generates token_database.csv
-
 2) Upload the token database to scope-survey.olin.edu and activate
    the survey.
-
 3) When all students have done the survey, download the results to
    survey.csv and run
-
 python process.py summary
-
 4) Print the player cards
-
 python process.py summary > summary
 a2ps -B --borders=no -1 -o summary.ps summary; evince summary.ps
-
 5) Run the allocation process
-
 python process.py
-
 6) Remove duplicates
-
 python rmdupes.py
-
 7) To print selected allocations:
-
 python ./process.py 032*.pkl > allocs.txt
 a2ps -1 -L100 -B --borders=no -o allocs.ps allocs.txt; evince allocs.ps
-
 8) Turn on DUMP_SWAPS and run
-
 python ./process.py 008.1441721038.212501.pkl > allocs.txt
 a2ps -1 -L100 -B --borders=no -o allocs.ps allocs.txt; evince allocs.ps
-
 9) Turn off DUMP_SWAPS and turn on DUMP_FINAL print the final version
-
 python ./process.py 008.1441721038.212501.pkl > allocs.txt
-
 Edit in the trades and send to SCOPE director
-
 """
 
-#!/usr/bin/python
 import sys
 import random
 import pickle
 import time
 import csv
+# import numpy
+# import picos as pic
+# import cvxopt as cvx
+# import pulp
+# import gurobipy
+
 
 from fuzzy3 import FuzzyDict
 from wrap3 import wrap
@@ -77,7 +61,6 @@ PROJECT_NAMES = [
     'Name 12',
     'Name 13',
     'Name 14'
-    
 ]
 
 # projects that require US citizenship or permanent resident status
@@ -107,11 +90,10 @@ LOCKED_STUDENTS = []
 # students barred from a project
 BARRED_STUDENTS = []
 #    ("Student 1", 'Name 2'),
-#]
+# ]
 
 
-# TODO: implement locked and barred students without modifying
-# preferences
+# TODO: implement locked and barred students without modifying preferences
 
 SURVEYFILE = 'Data/survey_anon.csv'
 STUDENTFILE = 'Data/students_anon.csv'
@@ -146,6 +128,7 @@ class Mdict(dict):
     from dict, so it is up to the user to initialize all values to
     lists.
     """
+
     def __setitem__(self, key, value):
         """add the given value to the list of values for this key"""
         self.setdefault(key, []).append(value)
@@ -155,6 +138,7 @@ class Hist(dict):
     """dictionary that maps from items to the number of times
     they appear
     """
+
     def count(self, x):
         """Increments the count for an item.
 
@@ -172,6 +156,7 @@ class Allocation:
     projects: list of Project
     skills: list of string skill names
     students: list of Student
+    # TODO: add comparison by score
     """
 
     def __init__(self, survey):
@@ -188,9 +173,49 @@ class Allocation:
         for proj in self.projects:
             self.teams[proj] = []
 
+    def __lt__(self, other):
+        """Less than (strict) comparison"""
+        score1 = self.score()
+        score2 = other.score()
+        if score1 < score2:
+            return True
+        else:
+            return False
+
+    def __gt__(self,other):
+        """Greater than (strict) comparison"""
+        score1 = self.score()
+        score2 = other.score()
+        if score1 > score2:
+            return True
+        else:
+            return False
+
+    def __le__(self,other):
+        """Less than or equal (nonstrict) comparison"""
+        score1 = self.score()
+        score2 = other.score()
+        if score1 <= score2:
+            return True
+        else:
+            return False
+
+    def __eq__(self, other):
+        """Equality comparison"""
+        return self.score() == other.score()
+
+    def __ge__(self, other):
+        """Greater than or equal (nonstrict) comparison"""
+        score1 = self.score()
+        score2 = other.score()
+        if score1 >= score2:
+            return True
+        else:
+            return False
+
     def add(self, stu, proj):
         """add stu to proj"""
-        assert self.ison.get(stu, None) == None
+        assert self.ison.get(stu, None) is None
         self.teams[proj].append(stu)
         self.ison[stu] = proj
 
@@ -248,8 +273,8 @@ class Allocation:
             for cost, stu2 in swaps:
                 proj = self.ison[stu2]
                 print('    %d\t%20.20s %8.8s  %s %s' % (cost, stu2,
-                                               stu2.major, stu2.gpa,
-                                               str(proj)[:30]))
+                                                        stu2.major, stu2.gpa,
+                                                        str(proj)[:30]))
 
             print('')
             moves = self.cheapest_moves(stu)
@@ -284,12 +309,12 @@ class Allocation:
         total = 0
 
         # map from team size to maximum number of low GPAs
-        limit = {4:2, 5:2, 6:3, 7:3, 8:3}
+        limit = {4: 2, 5: 2, 6: 3, 7: 3, 8: 3}
 
         for proj, stus in self.teams.items():
             # use this to make sure a team gets enough people
             # from a particular list
-            #if proj.name == 'Name 1':
+            # if proj.name == 'Name 1':
             #    if not enough_on_list(proj, SPECIAL_LIST, 2):
             #        total += 100
 
@@ -374,7 +399,8 @@ class Allocation:
         random.shuffle(stus)
         for stu in stus:
             count = self.find_swap(stu) or self.find_move(stu)
-            if count > 0: return count
+            if count > 0:
+                return count
         return 0
 
     def fix_understaff(self):
@@ -425,11 +451,11 @@ class Allocation:
 
     def find_swaps(self):
         """find all the students who are sad and try to find
-        a swap that makes them happy.  Return the total number
+        a swap that makes them happy. Return the total number
         of swaps made.
-	"""
-	# make a list of (diff, random, student) tuples, in ascending order
-        sad = [(stu.prefs[self.ison[stu]]-stu.maxpref, random.random(), stu)
+        """
+        # make a list of (diff, random, student) tuples, in ascending order
+        sad = [(stu.prefs[self.ison[stu]] - stu.maxpref, random.random(), stu)
                for stu in self.students]
         sad.sort()
 
@@ -447,7 +473,8 @@ class Allocation:
         src = self.ison[stu]
         t = []
         for dest in self.projects:
-            if src is dest: continue
+            if src is dest:
+                continue
             for stu2 in self.teams[dest]:
                 total = stu2.prefs[src] + stu.prefs[dest]
                 rand = random.random()
@@ -457,7 +484,7 @@ class Allocation:
             return 0
         t.sort(reverse=True)
 
-	# try out the possible swaps in decreasing order of total
+        # try out the possible swaps in decreasing order of total
         # happiness
 
         for total, rand, stu2 in t:
@@ -470,14 +497,14 @@ class Allocation:
         """find a project we can move this student to without
         hurting the global score by more than tol
         """
-	# find all the projects this student likes better
+        # find all the projects this student likes better
         src = self.ison[stu]
         pref = stu.prefs[src]
         projects = [(stu.prefs[proj], proj)
                     for proj in self.projects
                     if proj != src]
 
-	# projects is a list of (preference, project) tuples
+        # projects is a list of (preference, project) tuples
         for pref, dest in projects:
             if self.try_move(stu, dest):
                 return 1
@@ -493,13 +520,11 @@ class Allocation:
         self.add(stu1, p2)
         self.add(stu2, p1)
 
-
     def move(self, stu, proj):
         """move this student to proj"""
         src = self.ison[stu]
         self.remove(stu, src)
         self.add(stu, proj)
-
 
     def enumerate_swaps(self):
         """try all possible swaps and return the number of winners.
@@ -507,7 +532,8 @@ class Allocation:
         total = 0
         for stu1 in self.students:
             for stu2 in self.students:
-                if stu1 is stu2: continue
+                if stu1 is stu2:
+                    continue
                 total += self.try_swap(stu1, stu2)
         return total
 
@@ -526,7 +552,7 @@ class Allocation:
         t = [(self.cost_swap(stu1, stu2), stu2)
              for stu2 in self.students
              if self.ison[stu1] is not self.ison[stu2]]
-        t = [(cost, stu) for cost, stu in t if cost<100]
+        t = [(cost, stu) for cost, stu in t if cost < 100]
         t.sort()
         return t
 
@@ -536,7 +562,7 @@ class Allocation:
         src = self.ison[stu]
         t = [(self.cost_move(stu, proj), proj)
              for proj in self.projects if proj is not src]
-        t = [(cost, proj) for cost, proj in t if cost<100]
+        t = [(cost, proj) for cost, proj in t if cost < 100]
         t.sort()
         return t
 
@@ -578,12 +604,16 @@ class Allocation:
         """what is the net change in cost of moving stu to dest"""
         src = self.ison[stu]
         before_cost = self.cost(stu, src)
-        if self.num(src) == src.maxstaff+1: before_cost += OVERCOST
-        if self.num(src) == src.minstaff: before_cost -= UNDERCOST
+        if self.num(src) == src.maxstaff + 1:
+            before_cost += OVERCOST
+        if self.num(src) == src.minstaff:
+            before_cost -= UNDERCOST
 
         after_cost = self.cost(stu, dest)
-        if self.num(dest) == dest.maxstaff: after_cost += OVERCOST
-        if self.num(dest) == dest.minstaff-1: after_cost -= UNDERCOST
+        if self.num(dest) == dest.maxstaff:
+            after_cost += OVERCOST
+        if self.num(dest) == dest.minstaff - 1:
+            after_cost -= UNDERCOST
 
         return after_cost - before_cost
 
@@ -623,7 +653,7 @@ class Allocation:
 
         # make a list of possible moves and their costs
         t1 = [(self.cost_move(stu, proj), random.random(), proj)
-             for proj in projects]
+              for proj in projects]
 
         stus = []
         for proj in projects:
@@ -631,7 +661,7 @@ class Allocation:
 
         # make a list of possible swaps and their costs
         t2 = [(self.cost_swap(stu, stu2), random.random(), stu2)
-             for stu2 in stus]
+              for stu2 in stus]
 
         # find the cheapest move and the cheapest swap
         cost1, rand, proj = min(t1)
@@ -642,7 +672,6 @@ class Allocation:
             self.move(stu, proj)
         else:
             self.swap(stu, stu2)
-
 
 
 def make_random_alloc(survey):
@@ -742,7 +771,7 @@ class Student(object):
     """Represents a student."""
 
     def __init__(self, stuid, prefs, roles, skills, email,
-                               antinames, comment, major):
+                 antinames, comment, major):
         self.stuid = stuid
         self.prefs = prefs
         self.maxpref = max(prefs.values())
@@ -774,9 +803,9 @@ class Student(object):
     def entry(self, antis):
         """Returns a string representation."""
         name = self.name[:23]
-        name = name + ' ' * (23-len(name))
+        name = name + ' ' * (23 - len(name))
         return '%s  %8.8s  %s  %s  %s' % (name, self.major,
-                                              self.roles[0], self.gpa, antis)
+                                          self.roles[0], self.gpa, antis)
 
     def entry1(self):
         """Returns a short student entry with antipreferences."""
@@ -850,8 +879,8 @@ class Survey(object):
     def __init__(self, tokens):
         self.tokens = tokens
         self.project_codes = []
-        self.skills = []          # skill names
-        self.projects = []        # list of projects
+        self.skills = []  # skill names
+        self.projects = []  # list of projects
 
         # students is a fuzzy mapping from names to student objects
         self.students = FuzzyDict(cutoff=0.6)
@@ -899,7 +928,7 @@ class Survey(object):
         n = self.num_prefs = len(self.project_codes)
         m = self.num_skills = len(self.skills)
 
-        #for i, title in enumerate(titles):
+        # for i, title in enumerate(titles):
         #    print i, title
 
         # parse the lines
@@ -907,19 +936,19 @@ class Survey(object):
             # print t
 
             survey_id = t[0]
-            #completed = t[1]
+            # completed = t[1]
 
             j = 1
-            i, j = j, j+n
+            i, j = j, j + n
             prefs = t[i:j]
 
-            i, j = j, j+2
+            i, j = j, j + 2
             antinames = [name.strip() for name in t[i:j]]
 
-            i, j = j, j+4
+            i, j = j, j + 4
             roles = t[i:j]
 
-            i, j = j, j+m
+            i, j = j, j + m
             skills = t[i:j]
 
             major = t[-5]
@@ -970,7 +999,7 @@ class Survey(object):
         student.visa = token.visa
 
         if (student.citizen == 'UNITED STATES' or
-            student.visa == 'Permanent Resident'):
+                student.visa == 'Permanent Resident'):
             student.is_citizen = True
         else:
             student.is_citizen = False
@@ -983,12 +1012,13 @@ class Survey(object):
         """
         # fixers is a map from known problem names to canonical names
         fixers = {
-            }
+        }
 
         stus = list(self.students.values())
         for stu in stus:
             for name in stu.antinames:
-                if name == '': continue
+                if name == '':
+                    continue
                 if name in fixers:
                     name = fixers[name]
                 try:
@@ -1047,7 +1077,7 @@ class Survey(object):
         """Mark the projects that require US citizens."""
         for projname in RESTRICTED_PROJECTS:
             proj = self.find_project(projname)
-            if proj == None:
+            if proj is None:
                 print("Can't find project %s" % projname)
             else:
                 print('restricted', proj)
@@ -1062,11 +1092,12 @@ class Survey(object):
                 print("Can't find locked student", stuname)
 
             proj = self.find_project(projname)
-            if proj == None:
+            if proj is None:
                 print("Can't find project %s" % projname)
             self.lock_student(stu, proj)
 
-    def lock_student(self, stu, goodproj):
+    @staticmethod
+    def lock_student(stu, goodproj):
         """Lock a student onto a particular project."""
         print(stu.name, 'locked onto', goodproj.name)
         stu.locked = True
@@ -1094,11 +1125,12 @@ class Survey(object):
                 print("Can't find locked student", stuname)
 
             proj = self.find_project(projname)
-            if proj == None:
+            if proj is None:
                 print("Can't find project %s" % projname)
             self.bar_student(stu, proj)
 
-    def bar_student(self, stu, proj):
+    @staticmethod
+    def bar_student(stu, proj):
         """Change the preferences of a noncitizen so they will not
         be put on restricted projects.
         """
@@ -1135,10 +1167,10 @@ class Survey(object):
         for stu in list(self.students.values()):
             if stu.locked:
                 continue
-                prefs = list(stu.prefs.values())
-                prefs.sort(reverse=True)
-                if prefs[1] < 3:
-                    self.print_student(stu)
+            prefs = list(stu.prefs.values())
+            prefs.sort(reverse=True)
+            if prefs[1] < 3:
+                self.print_student(stu)
         print('')
 
     def print_students(self):
@@ -1157,7 +1189,7 @@ class Survey(object):
 
         print('\nProject\t', end=' ')
         for i in range(len(self.projects)):
-            print(i+1, end=' ')
+            print(i + 1, end=' ')
         print('\n     \t', end=' ')
         for i, proj in enumerate(self.projects):
             try:
@@ -1174,8 +1206,7 @@ class Survey(object):
         print('')
 
     def print_projects(self):
-        """print one summary page per project
-        """
+        """print one summary page per project"""
         for proj in self.projects:
             print('Project', proj)
             for i in [5, 4, 3]:
@@ -1185,7 +1216,6 @@ class Survey(object):
                         print(student.entry1())
             print('')
 
-
     def print_names(self):
         """print the project names and skill names"""
         for proj in self.projects:
@@ -1194,7 +1224,7 @@ class Survey(object):
         print('')
 
         for i, skill in enumerate(self.skills):
-            print(i+1, '\t', skill)
+            print(i + 1, '\t', skill)
 
         print('')
 
@@ -1230,7 +1260,7 @@ def make_survey():
     survey.parse(SURVEYFILE)
 
     survey.process_conflicts()
-    #survey.fix_whiners()
+    # survey.fix_whiners()
 
     # we are not using check_citizenship any more;
     # instead using info from students.csv
@@ -1245,9 +1275,8 @@ def make_survey():
 
 def optimize():
     """run an infinite loop that generates allocations and tries
-    to improve them, recording good solutions as it goes.
-    """
-
+        to improve them, recording good solutions as it goes.
+        """
     survey = make_survey()
     if len(survey.students) < 10:
         print('Not enough students.')
@@ -1317,14 +1346,12 @@ def print_summary():
     survey.print_names()
     survey.print_conflicts()
     survey.print_roles()
-    #survey.print_hard_to_place()
+    # survey.print_hard_to_place()
     survey.print_students()
     survey.print_projects()
 
 
 def process_tokens():
-    """
-    """
     tokens = Tokens(STUDENTFILE)
     tokens.write_csv('token_database.csv')
 
@@ -1348,6 +1375,7 @@ if __name__ == '__main__':
     profile = 0
     if profile:
         import profile
+
         profile.run('main(*sys.argv)')
     else:
         main(*sys.argv)
