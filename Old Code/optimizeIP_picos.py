@@ -109,7 +109,9 @@ df_skills = df_original.iloc[:,num_projects+7:num_projects+13].copy()
 print(df_skills)
 
 # problem definition
-prob = pic.Problem()
+# TODO: check syntax
+prob = pic.Problem(solver='gurobi')
+
 
 # convert list of list of penalties into 2D matrix for picos
 penalty1 = pic.new_param('mat', penalties)
@@ -119,34 +121,31 @@ penalty2 = pic.new_param('mat', antiprefs)
 # add variable x_i,j matrix for students
 stu_to_proj = prob.add_variable('x', (num_students,num_projects), vtype='binary')
 # add variable y_i,i',j matrix dependent on x_i,j
-stu_group = []
-for j in range(num_projects):
-    stu_group.append(prob.add_variable('y[{0}]'.format(j),(num_students,num_students),vtype='binary'))
-    prob.set_var_value('y[{0}]'.format(j),np.zeros((num_students,num_students)).tolist())
+stu_group = prob.add_variable('y', (num_students,num_students), vtype='binary')
 
 # constraints setup
 # sum of all entries x_ij over i (project allocated student count) should be in between MINSTAFF and MAXSTAFF
 prob.add_list_of_constraints([sum(stu_to_proj[i]) >= MINSTAFF for i in range(num_students)])
 prob.add_list_of_constraints([sum(stu_to_proj[i]) <= MAXSTAFF for i in range(num_students)])
 # TODO: add specificity to MINSTAFF/MAXSTAFF constraints on a project-by-project basis
-# this is because exceptions to the minimum can exist
+# this is because exceptions to the minimum/maximum can exist
 
 # sum of all entries x_ij over j (student allocated project count) should be 1
 prob.add_list_of_constraints([sum(stu_to_proj[:][j]) == 1 for j in range(num_projects)])
 
 # IP constraints for y
-# y_ii'j = x_ij + x_i'j - 1
-prob.add_list_of_constraints([stu_group[j][i,k] == stu_to_proj[i,j]+stu_to_proj[k,j]-1
+# y_ii' >= x_ij + x_i'j - 1 for all j
+prob.add_list_of_constraints([stu_group[i,k] >= stu_to_proj[i,j]+stu_to_proj[k,j]-1
                               for j in range(num_projects) for i in range(num_students) for k in range(num_students)])
 # 0 <= y_ii'j <= 1
-prob.add_list_of_constraints([stu_group[j][i,k] >= 0
+prob.add_list_of_constraints([stu_group[i,k] >= 0
                               for j in range(num_projects) for i in range(num_students) for k in range(num_students)])
-prob.add_list_of_constraints([stu_group[j][i,k] <= 1
+prob.add_list_of_constraints([stu_group[i,k] <= 1
                               for j in range(num_projects) for i in range(num_students) for k in range(num_students)])
 
 # objective function setup
 prob.set_objective('min',pic.sum([penalty1[i,j]*stu_to_proj[i,j] for i in range(num_students) for j in range(num_projects)])
-                   + pic.sum([penalty2[i,k]*stu_group[j][i,k] for j in range(num_projects) for i in range(num_students)
+                   + pic.sum([penalty2[i,k]*stu_group[i,k] for j in range(num_projects) for i in range(num_students)
                               for k in range(num_students)]))
 
 # print the problem setup summary
@@ -154,9 +153,8 @@ print(prob)
 print('type:   '+prob.type)
 print('status: '+prob.status)
 # note that running using cvxopt encounters
-# picos.tools.NotAppropriateSolverError: 'cvxopt' cannot solve problems of type MIP
 # TODO: replace solver?
-prob.solve(solver='cvxopt',verbose=False)
+prob.solve(solver='gurobi',verbose=False)
 print('status: '+prob.status)
 
 # optimal value of objective function
