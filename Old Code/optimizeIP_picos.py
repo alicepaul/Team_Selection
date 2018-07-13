@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from optimizeIP_repeat import optimize_repeat
 import time
-import picos
 
 """Optimization using integer programming formulation with PICOS
 does not have active comparison with process3.py """
@@ -24,7 +23,7 @@ MAXSTAFF = 6
 # projects allowed to go below the minimum
 # TODO: change if project data also changes
 MINSTAFF_EXCEPTIONS = {
-    'project [1]': 4,
+    # unknown for other years!
 }
 # create dictionary for MINSTAFF_PROJECTS according to exceptions
 MINSTAFF_PROJECTS = {}
@@ -37,7 +36,7 @@ for name in project_names:
 # projects allowed to go above the maximum
 # TODO: change if project data also changes
 MAXSTAFF_EXCEPTIONS = {
-    'project [2]': 5,
+    # unknown for other years!
 }
 # create dictionary for MAXSTAFF_PROJECTS according to exceptions
 MAXSTAFF_PROJECTS = {}
@@ -75,10 +74,11 @@ GPA_COST = 100
 # Maximum number of solutions to extract from the integer program
 # this will ask gurobi to find the top # best solutions
 # TODO: revise as desired
-SOLUTION_LIMIT = 2
+SOLUTION_LIMIT = 100
 
 # extract data from survey_anon.csv, token used as index column
-df = pd.read_csv('Data/survey_anon.csv', index_col='Token',
+# TODO: change csv file AND names
+df = pd.read_csv('Data/survey_anon15.csv', index_col='Token',
                  names=['id', 'project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
                         'project [7]', 'project [8]', 'project [9]', 'project [10]', 'project [11]', 'project [12]',
                         'project [13]', 'project [14]', 'bullets [1]', 'bullets [2]',
@@ -87,7 +87,8 @@ df = pd.read_csv('Data/survey_anon.csv', index_col='Token',
                         'major', 'major [comment]', 'comments', 'Email address', 'Token'])
 
 # extract data from students_anon.csv, ID Number (same as token) used as index column
-df2 = pd.read_csv('Data/students_anon.csv', index_col='ID Number',
+# TODO: change csv file
+df2 = pd.read_csv('Data/students_anon15.csv', index_col='ID Number',
                   names=['Full Name (Last, First)', 'Section Course Number', 'Section Number', 'Section Session Code',
                          'Section Year', 'ID Number', 'First Name', 'Last Name', 'Gender Code', 'Cumulative GPA',
                          'Major 1 Code', 'Concentration 1 Code', 'Citizenship Description', 'Visa Description', 'EML1'])
@@ -121,6 +122,7 @@ df2_demographic = df2.copy()
 # print(df2_demographic.iloc[:,0].copy())
 
 # create dictionary for penalties
+# TODO: revise dictionaries to reflect penalties above for sensitivity analysis
 penalty_dict = {'1':'10000', '2':'1000', '3':'5.0', '4':'1.0', '5':'0'}
 revise_dict = {'1.0':'1','5.0':'5'}
 
@@ -155,7 +157,7 @@ df_bullet.fillna(0,inplace=True)
 
 # obtain tokens from index array
 tokens = df_original.index.tolist()[1:]
-print(tokens)
+# print(tokens)
 
 # preallocate a numpy array of dimension num_student x num_student
 # we will preserve order in terms of tokens (row = from, col = to)
@@ -193,7 +195,7 @@ for token in tokens:
 # TODO: (IDEA) incorporate roles into integer program so that no more than 1 role is duplicated/covered twice
 # TODO: create diversity score
 df_roles = df_original.iloc[:,num_projects+3:num_projects+7].copy()
-# print(df_roles)
+#print(df_roles)
 
 # TODO: (IDEA) incorporate skills into integer program so that no more than 1 skill is duplicated/covered twice
 # TODO: create diversity score
@@ -212,15 +214,17 @@ df2_major = df2_demographic.iloc[:,2].copy()
 
 # extract GPAs
 df2_gpa = df2_demographic.iloc[:,1].copy()
-print(df2_gpa)
+# print(df2_gpa)
 
 # reorder GPAs in the same order as token ID
 gpa = df2_gpa.loc[tokens]
 stu_gpas = [float(indiv_gpa) for indiv_gpa in gpa]
+# print(stu_gpas)
 
 # indicator function for whether a student GPA is < 3.0 or whatever MIN_GPA is set to be
 stu_gpa_indic = [1 if indiv_gpa < MIN_GPA else 0 for indiv_gpa in stu_gpas]
-print(stu_gpa_indic)
+# print(stu_gpa_indic)
+
 # utilize while loop to find solutions without duplicates
 # counter initialized to 0, the actual optimization done in optimizeIP_repeat.py
 count_solutions = 0
@@ -228,7 +232,7 @@ past_solns = []
 while count_solutions != SOLUTION_LIMIT:
 
     new_soln = optimize_repeat(num_students, num_projects, penalties, antiprefs, MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
-                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST)
+                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST, past_solns)
     # optimal value of objective function
     print('the optimal value of the objective function is:')
     print(new_soln[0])
@@ -238,7 +242,7 @@ while count_solutions != SOLUTION_LIMIT:
 
     # create a new solution file txt
     f = open('soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
-                                                          score=new_soln[0], date=time.strftime("%m%d%Y")),'w+')
+                                                          score=int(new_soln[0]), date=time.strftime("%m%d%Y")),'w+')
 
     # in order to obtain names instead of tokens, find a way to map the tokens back to the names
     # then replace 'Student with token ' + tokens[i] with 'Student with name ' + name[i]
@@ -252,9 +256,10 @@ while count_solutions != SOLUTION_LIMIT:
                 f.write('Student with token ' + tokens[i] + ' works on project #' + str(j + 1) + " " + project_names[j] + '\n')
 
     # close instance of file
+    print()
     print('Solution saved as file ' +
           'soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
-                                                       score=new_soln[0], date=time.strftime("%m%d%Y")))
+                                                       score=int(new_soln[0]), date=time.strftime("%m%d%Y")))
     f.close()
 
     # optimal value of y_i,i' arrays
@@ -266,16 +271,5 @@ while count_solutions != SOLUTION_LIMIT:
     past_solns.append(new_soln[1])
     count_solutions += 1
 
-print(type(past_solns[0].value))
-print(past_solns[0].[5,15])
-
-pairs = []
-
-for i in range(num_students):
-    for j in range(num_students):
-        if past_solns[0][i,j] == 1:
-            pairs.append([i,j])
-
-print(pairs)
 
 

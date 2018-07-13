@@ -1,9 +1,7 @@
-import numpy as np
 import picos as pic
-import pandas as pd
 
 def optimize_repeat(num_students, num_projects, penalties, antiprefs,MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
-                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST):
+                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST, past_solns):
 
     # problem definition
     prob = pic.Problem(solver='gurobi')
@@ -11,7 +9,7 @@ def optimize_repeat(num_students, num_projects, penalties, antiprefs,MINSTAFF_PR
     # convert list of list of penalties into 2D matrix for picos
     penalty1 = pic.new_param('mat', penalties)
     # convert list of list of antiprefs into 2D matrix for picos
-    penalty2 = pic.new_param('mat', antiprefs)
+    # penalty2 = pic.new_param('mat', antiprefs)
 
     # add variable x_i,j matrix for students
     stu_to_proj = prob.add_variable('x', (num_students,num_projects), vtype='binary')
@@ -47,9 +45,13 @@ def optimize_repeat(num_students, num_projects, penalties, antiprefs,MINSTAFF_PR
                                   for j in range(num_projects)])
 
     # past solutions constraint
-    # for past in past_solns:
-    #     prob.add_constraint(stu_to_proj != past)
-    # prob.add_list_of_constraints([stu_to_proj != past for past in past_solns])
+    for past in past_solns:
+        pairs = []
+        for i in range(num_students):
+            for j in range(num_projects):
+                if past.value[i, j] == 1:
+                    pairs.append([i, j])
+        prob.add_constraint(sum([stu_to_proj[i,j] for [i,j] in pairs]) <= num_students-1)
 
     # objective function setup
     prob.set_objective('min',pic.sum([penalty1[i,j]*stu_to_proj[i,j] for i in range(num_students) for j in range(num_projects)])
