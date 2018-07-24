@@ -1,15 +1,15 @@
 import picos as pic
 
-def optimize_repeat(num_students, num_projects, penalties, antiprefs,MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
-                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST, past_solns):
+def optimize_repeat(num_students, num_projects, penalties, MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
+                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST, past_solns,
+                    stu_visa, stu_other, citizenship_req_indices, visa_req_indices, LOCKED_STUDENTS,
+                    BARRED_STUDENTS, tokens):
 
     # problem definition
     prob = pic.Problem(solver='gurobi')
 
     # convert list of list of penalties into 2D matrix for picos
     penalty1 = pic.new_param('mat', penalties)
-    # convert list of list of antiprefs into 2D matrix for picos
-    # penalty2 = pic.new_param('mat', antiprefs)
 
     # add variable x_i,j matrix for students
     stu_to_proj = prob.add_variable('x', (num_students,num_projects), vtype='binary')
@@ -43,6 +43,43 @@ def optimize_repeat(num_students, num_projects, penalties, antiprefs,MINSTAFF_PR
     gpa_sub_array = [indic-0.5 for indic in stu_gpa_indic]
     prob.add_list_of_constraints([gpa_violation[j] >= sum([a*b for a,b in zip(gpa_sub_array,stu_to_proj[:,j])])
                                   for j in range(num_projects)])
+
+    # IP constraint for citizens, visa holders, and other
+    # citizens can access any project (hence no restrictions)
+    # visa holders can access up to projects that require visas
+    # other (aliens) can access only the projects that do not have citizenship or visa requirements
+
+    # constraint for ctzn projects, that visa holder and alien/other students cannot join (set to 0)
+    prob.add_list_of_constraints([stu_to_proj[stu_index,proj_index] == 0
+                                  for stu_index in stu_visa for proj_index in citizenship_req_indices])
+    prob.add_list_of_constraints([stu_to_proj[stu_index,proj_index] == 0
+                                  for stu_index in stu_other for proj_index in citizenship_req_indices])
+
+    # constraint for visa projects, that alien/other students cannot join (set to 0)
+    prob.add_list_of_constraints([stu_to_proj[stu_index,proj_index] == 0
+                                  for stu_index in stu_other for proj_index in visa_req_indices])
+
+    # constraint for students locked into a project
+    for key in LOCKED_STUDENTS.keys():
+        # locked student token gives the index of which student
+        stu_index = tokens.index(key)
+        # project name gives the index of project
+        proj_index = project_names.index(LOCKED_STUDENTS[key])
+        # constraint is that the student, project pair must equal 1
+        # note: this means that student preference is overridden so if student expresses non-5 preference
+        # on a locked project, may result in changed optimality of outcomes or infeasibility
+        prob.add_constraint(stu_to_proj[stu_index, proj_index] == 1)
+
+    # constraint for students barred from a project
+    for key in BARRED_STUDENTS.keys():
+        # barred student token gives the index of which student
+        stu_index = tokens.index(key)
+        # project name gives the index of project
+        proj_index = project_names.index(BARRED_STUDENTS[key])
+        # constraint is that the student, project pair must equal 0
+        # note: this means that student preference is overridden so if student expresses non-1 preference
+        # on a locked project, may result in changed optimality of outcomes or infeasibility
+        prob.add_constraint(stu_to_proj[stu_index,proj_index] == 0)
 
     # past solutions constraint
     for past in past_solns:

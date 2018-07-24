@@ -49,36 +49,65 @@ for name in project_names:
 # projects that don't need allocation - feature omitted
 LOCKED_PROJECT_NAMES = []
 
-# TODO: implement locked students without modifying preferences
-# students locked onto a project
-LOCKED_STUDENTS = []
+# students locked onto a project - in dictionary form
+LOCKED_STUDENTS = {
+#   '(locked student token)': 'project [#]'), # reason: mentor really wants him/her
+}
 
-# TODO: implement barred students without modifying preferences
-# students barred from a project
-BARRED_STUDENTS = []
-#    ("Student 1", 'project [2]'), # reason: non-US citizenship / visa expiry
-# ]
+# students barred from a project - in dictionary form
+BARRED_STUDENTS = {
+#    ('(barred student token)', 'project [#]'), # reason: non-US citizenship / visa expiry
+}
 
 # Cost constants
-# TODO: change values for sensitivity analysis
-PREF_COST_5 = 0
-PREF_COST_4 = 1
-PREF_COST_3 = 5
-PREF_COST_2 = 1000
-PREF_COST_1 = 10000
+# note: pref costs in string form due to working with dictionary below
+# caution: must make sure RHS values do not overlap with preference values (hence 1.0 instead of 1)
+# TODO: alter values for sensitivity analysis
+PREF_COST_5 = '0'
+PREF_COST_4 = '1.0'
+PREF_COST_3 = '5.0'
+PREF_COST_2 = '1000'
+PREF_COST_1 = '10000'
 ANTIPREF_COST = 100
 NONCITIZEN_COST = 1000
-MIN_GPA = 3.0
+MIN_GPA = 3.0 # we change this later to 10th percentile, this is a default
 GPA_COST = 100
+
+# TODO: change if project data also changes
+# Citizenship/visa-affected projects, list by name
+# US citizens only projects
+citizenship_required = []
+# US citizens or visa holders only projects
+visa_required = []
+# remainder that is open to all students of whatever citizenship/visa status
+no_ctz_or_visa_req = ['project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
+                      'project [7]', 'project [8]', 'project [9]', 'project [10]', 'project [11]', 'project [12]',
+                      'project [13]', 'project [14]']
+
+# following code changes project names to what index they hold
+citizenship_req_indices = []
+visa_req_indices = []
+no_ctz_or_visa_req_indices = []
+for proj_name in project_names:
+    if proj_name in citizenship_required:
+        citizenship_req_indices.append(project_names.index(proj_name))
+    elif proj_name in visa_req_indices:
+        visa_req_indices.append(project_names.index(proj_name))
+    else:
+        no_ctz_or_visa_req_indices.append(project_names.index(proj_name))
 
 # Maximum number of solutions to extract from the integer program
 # this will ask gurobi to find the top # best solutions
 # TODO: revise as desired
 SOLUTION_LIMIT = 100
 
+# Maximum number of solutions to take that are pairwise most diverse
+# TODO: implement!
+DIVERSE_LIMIT = 10
+
 # extract data from survey_anon.csv, token used as index column
 # TODO: change csv file AND names
-df = pd.read_csv('Data/survey_anon15.csv', index_col='Token',
+df = pd.read_csv('Data/survey_anon17.csv', index_col='Token',
                  names=['id', 'project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
                         'project [7]', 'project [8]', 'project [9]', 'project [10]', 'project [11]', 'project [12]',
                         'project [13]', 'project [14]', 'bullets [1]', 'bullets [2]',
@@ -88,7 +117,7 @@ df = pd.read_csv('Data/survey_anon15.csv', index_col='Token',
 
 # extract data from students_anon.csv, ID Number (same as token) used as index column
 # TODO: change csv file
-df2 = pd.read_csv('Data/students_anon15.csv', index_col='ID Number',
+df2 = pd.read_csv('Data/students_anon17.csv', index_col='ID Number',
                   names=['Full Name (Last, First)', 'Section Course Number', 'Section Number', 'Section Session Code',
                          'Section Year', 'ID Number', 'First Name', 'Last Name', 'Gender Code', 'Cumulative GPA',
                          'Major 1 Code', 'Concentration 1 Code', 'Citizenship Description', 'Visa Description', 'EML1'])
@@ -102,6 +131,10 @@ df.drop('major',axis=1,inplace=True)
 df.drop('major [comment]',axis=1,inplace=True)
 df.drop('comments',axis=1,inplace=True)
 df.drop('Email address',axis=1,inplace=True)
+
+# salvage name portion of dataframe for presentation
+df_names = df2.iloc[:,[5,6]].copy()
+# print(df_names)
 
 #drop unnecessary columns for second dataframe
 df2.drop('Full Name (Last, First)',axis=1,inplace=True)
@@ -119,12 +152,13 @@ df2.drop('Concentration 1 Code',axis=1,inplace=True)
 df2.drop('EML1',axis=1,inplace=True)
 # WARNING: if citizenship / visa status dropped, then future indices should be changed
 df2_demographic = df2.copy()
-# print(df2_demographic.iloc[:,0].copy())
+# print(df2_demographic)
 
 # create dictionary for penalties
-# TODO: revise dictionaries to reflect penalties above for sensitivity analysis
-penalty_dict = {'1':'10000', '2':'1000', '3':'5.0', '4':'1.0', '5':'0'}
-revise_dict = {'1.0':'1','5.0':'5'}
+# TODO: revise dictionaries to reflect penalties above for sensitivity analysis if not already done so
+penalty_dict = {'1': PREF_COST_1, '2': PREF_COST_2, '3': PREF_COST_3, '4': PREF_COST_4, '5': PREF_COST_5}
+# TODO: revise dictionary if value ever gets overwritten - SEE CAUTION ABOVE in sensitivity analysis section
+revise_dict = {PREF_COST_4:str(int(float(PREF_COST_4))),PREF_COST_3:str(int(float(PREF_COST_3)))}
 
 # manipulation of first dataframe to include only preferences
 df_pref=df_original.iloc[:,1:num_projects+1].copy()
@@ -192,13 +226,9 @@ for token in tokens:
 # print(antiprefs)
 
 # extract other possibly relevant data to build upon
-# TODO: (IDEA) incorporate roles into integer program so that no more than 1 role is duplicated/covered twice
-# TODO: create diversity score
 df_roles = df_original.iloc[:,num_projects+3:num_projects+7].copy()
-#print(df_roles)
+# print(df_roles)
 
-# TODO: (IDEA) incorporate skills into integer program so that no more than 1 skill is duplicated/covered twice
-# TODO: create diversity score
 df_skills = df_original.iloc[:,num_projects+7:num_projects+13].copy()
 # print(df_skills)
 
@@ -211,6 +241,7 @@ df2_gender = df2_demographic.iloc[:,0].copy()
 # if a mix of majors is preferred, can code up a solution using this data
 df2_major = df2_demographic.iloc[:,2].copy()
 # print(df2_major)
+print(df2_major.loc[tokens])
 
 # extract GPAs
 df2_gpa = df2_demographic.iloc[:,1].copy()
@@ -221,9 +252,39 @@ gpa = df2_gpa.loc[tokens]
 stu_gpas = [float(indiv_gpa) for indiv_gpa in gpa]
 # print(stu_gpas)
 
+# optionally alter MIN_GPA to 10th percentile of GPAs
+# comment out if unnecessary
+stu_gpas_np = np.array(stu_gpas)
+MIN_GPA = np.percentile(stu_gpas_np, 10)
+# print(MIN_GPA)
+
 # indicator function for whether a student GPA is < 3.0 or whatever MIN_GPA is set to be
-stu_gpa_indic = [1 if indiv_gpa < MIN_GPA else 0 for indiv_gpa in stu_gpas]
+stu_gpa_indic = [1 if indiv_gpa <= MIN_GPA else 0 for indiv_gpa in stu_gpas]
 # print(stu_gpa_indic)
+
+# extract citizenship description and visa status
+df_ctzn_or_visa = df2_demographic.iloc[:,[3,4]].copy()
+
+# sort the students into citizens, visa holders, and other/illegal by index
+stu_ctzn = []
+stu_visa = []
+stu_other = []
+for token in tokens:
+    # track which token we are on using index
+    token_row = tokens.index(token)
+    # obtain citizenship and visa status
+    ctzn_status = df_ctzn_or_visa.at[token, 'Citizenship Description']
+    visa_status = df_ctzn_or_visa.at[token, 'Visa Description']
+    # if Citizenship Description says Yes, then student token assigned to citizen group
+    if ctzn_status == 'Yes':
+        stu_ctzn.append(token_row)
+    # if Visa Description says Yes, then student token assigned to visa holder group
+    # alternatively, if visa description says what type, like F1/F2/M1/M2, check if answer is not 'No' or 'None'
+    elif visa_status == 'Yes':
+        stu_visa.append(token_row)
+    # otherwise, student does not hold citizenship or visa so is included in other group
+    else:
+        stu_other.append(token_row)
 
 # utilize while loop to find solutions without duplicates
 # counter initialized to 0, the actual optimization done in optimizeIP_repeat.py
@@ -231,29 +292,128 @@ count_solutions = 0
 past_solns = []
 while count_solutions != SOLUTION_LIMIT:
 
-    new_soln = optimize_repeat(num_students, num_projects, penalties, antiprefs, MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
-                    project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST, past_solns)
-    # optimal value of objective function
-    print('the optimal value of the objective function is:')
-    print(new_soln[0])
+    new_soln = optimize_repeat(num_students, num_projects, penalties, MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
+                               project_names, antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, GPA_COST, past_solns,
+                               stu_visa, stu_other, citizenship_req_indices, visa_req_indices, LOCKED_STUDENTS,
+                               BARRED_STUDENTS, tokens)
+    # optimal value of objective function - uncomment as needed
+    # print('the optimal value of the objective function is:')
+    # print(new_soln[0])
 
-    print('the optimal value of x (stu_to_proj matrix)')
-    print(new_soln[1])
+    # print('the optimal value of x (stu_to_proj matrix)')
+    # print(new_soln[1])
 
     # create a new solution file txt
     f = open('soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
                                                           score=int(new_soln[0]), date=time.strftime("%m%d%Y")),'w+')
 
-    # in order to obtain names instead of tokens, find a way to map the tokens back to the names
-    # then replace 'Student with token ' + tokens[i] with 'Student with name ' + name[i]
-    # TODO: above suggested fix if confidentiality not an issue
-    # TODO: edit project_names array to make more legible/sensible
-    # TODO: reorder by student last name or school ID if arranging by projects is insufficient
+    f.write('soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,score=int(new_soln[0]), date=time.strftime("%m%d%Y")))
+    f.write('\n')
+
+    # list of strings containing warnings about skill coverage on project
+    skill_warnings = []
+
+    # list of role coverage per project, values range 1-4
+    role_coverage = []
+
+    # loop to write data in tabular format
     for j in range(num_projects):
+        f.write('\n' + '>> ' + project_names[j] + ' ({index})'.format(index=j+1) + '\n')
+        # booleans to check whether at least one student with that skill exists on project team
+        check_MS = 0
+        check_MD = 0
+        check_P = 0
+        check_ECE = 0
+        check_MM = 0
+        check_UOD = 0
+        # booleans to check if a role is satisfied on project team
+        check_CREAT = 0
+        check_PUSH = 0
+        check_DOER = 0
+        check_PLAN = 0
         for i in range(num_students):
             if new_soln[1][i, j].value[0] == 1:
-                print('Student with token ' + tokens[i] + ' works on project #' + str(j + 1) + " " + project_names[j])
-                f.write('Student with token ' + tokens[i] + ' works on project #' + str(j + 1) + " " + project_names[j] + '\n')
+                curr_token = tokens[i]
+                f.write(df_pref.at[curr_token,project_names[j]] + ' ' # preference code
+                        + df_names.at[curr_token,'First Name'] + ' ' # first name
+                        + df_names.at[curr_token,'Last Name'] + ' ' # last name
+                        + ' '*(24-len(df_names.at[curr_token,'First Name'])-
+                               len(df_names.at[curr_token,'Last Name'])) + '\t' # spacing
+                        + df2_major.loc[tokens][i] +'\t' # major
+                        + df_roles.at[curr_token,'role [1]'] + '\t' # primary role
+                        # + df_roles.at[curr_token,'role [2]'] + '\t' # secondary role, suppressed for now
+                        + "%.5f" % float(df2_gpa.loc[tokens][i]) + '\t' # GPA, rounded to 5 decimals
+                        + '\u005B' + '\u005D' + '\t' # dummy code for violated antipreferences (NOT FUNCTIONAL)
+                        )
+                if df_skills.at[curr_token,'skills [MS]'] == 'Y':
+                    f.write('MS' + ' ')
+                    check_MS = 1
+                if df_skills.at[curr_token,'skills [MD]'] == 'Y':
+                    f.write('MD' + ' ')
+                    check_MD = 1
+                if df_skills.at[curr_token,'skills [P]'] == 'Y':
+                    f.write('P' + ' ')
+                    check_P = 1
+                if df_skills.at[curr_token,'skills [ECE]'] == 'Y':
+                    f.write('ECE' + ' ')
+                    check_ECE = 1
+                if df_skills.at[curr_token,'skills [MM]'] == 'Y':
+                    f.write('MM' + ' ')
+                    check_MM = 1
+                if df_skills.at[curr_token,'skills [UOD]'] == 'Y':
+                    f.write('UOD' + ' ')
+                    check_UOD = 1
+                if df_roles.at[curr_token,'role [1]'] == 'CREAT':
+                    check_CREAT = 1
+                if df_roles.at[curr_token,'role [1]'] == 'PUSH':
+                    check_PUSH = 1
+                if df_roles.at[curr_token,'role [1]'] == 'DOER':
+                    check_DOER = 1
+                if df_roles.at[curr_token,'role [1]'] == 'PLAN':
+                    check_PLAN = 1
+                f.write('\n')
+        if check_MS + check_MD + check_P + check_ECE + check_MM + check_UOD != 6:
+            warning = project_names[j] + ' is missing specialist(s) in:'
+            if check_MS == 0:
+                warning += ' MS'
+            if check_MD == 0:
+                warning += ' MD'
+            if check_P == 0:
+                warning += ' P'
+            if check_ECE == 0:
+                warning += ' ECE'
+            if check_MM == 0:
+                warning += ' MM'
+            if check_UOD == 0:
+                warning += ' UOD'
+            warning += '.'
+            skill_warnings.append(warning)
+        role_coverage.append(check_PLAN+check_CREAT+check_DOER+check_PUSH)
+
+    # loop to calculate role diversity of a team
+    # we give 1 point for all 4 roles covered, 4 points for 3/4 roles, 8 for 2/4 roles, 16 for 1/4 roles
+    # rationale is that 5 person team has 1/14 probability of hitting all 4/4 roles, 2/7 of hitting 3/4 roles,
+    # 4/7 of hitting 2/4 roles, and 1/14 of hitting 1/4 roles. 4 person case is similar (1/35, 4/35, 26/35, 4/35).
+    role_diversity = 0
+    for count in role_coverage:
+        if count == 4:
+            role_diversity += 1
+        if count == 3:
+            role_diversity += 4
+        if count == 2:
+            role_diversity += 8
+        if count == 1:
+            role_diversity += 16
+    f.write('\n' + 'Overall role diversity score for this allocation is ' + str(role_diversity) + '.' + '\n')
+
+    # loop to warn faculty of skill imbalance on a team
+    if len(skill_warnings) != 0:
+        f.write('\n')
+        f.write('Below are warnings regarding skill imbalance on a project team.' + '\n'
+                + 'If a project requires at least one member to have a particular skill,'
+                + ' reconsideration/swap may be necessary.' + '\n')
+    for warn in skill_warnings:
+        f.write(warn+'\n')
 
     # close instance of file
     print()
@@ -270,6 +430,3 @@ while count_solutions != SOLUTION_LIMIT:
 
     past_solns.append(new_soln[1])
     count_solutions += 1
-
-
-
