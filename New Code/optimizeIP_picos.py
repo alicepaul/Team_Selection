@@ -256,7 +256,7 @@ stu_gpas = [float(indiv_gpa) for indiv_gpa in gpa]
 # optionally alter MIN_GPA to 10th percentile of GPAs
 # comment out if unnecessary
 stu_gpas_np = np.array(stu_gpas)
-MIN_GPA = np.percentile(stu_gpas_np, 10)
+# MIN_GPA = np.percentile(stu_gpas_np, 10)
 # print(MIN_GPA)
 
 # indicator function for whether a student GPA is < 3.0 or whatever MIN_GPA is set to be
@@ -306,7 +306,7 @@ while count_solutions != SOLUTION_LIMIT:
     # print(new_soln[1])
 
     # create a new solution file txt
-    f = open('soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
+    f = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
                                                           score=int(new_soln[0]), date=time.strftime("%m%d%Y")),'w+')
 
     f.write('soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,score=int(new_soln[0]), date=time.strftime("%m%d%Y")))
@@ -420,7 +420,7 @@ while count_solutions != SOLUTION_LIMIT:
     # close instance of file
     print()
     print('Solution saved as file ' +
-          'soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
+          'Results/soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
                                                        score=int(new_soln[0]), date=time.strftime("%m%d%Y")))
     f.close()
 
@@ -469,7 +469,7 @@ while count_div_soln < DIVERSE_LIMIT:
         first_soln = sums.index(max(sums))
         div_soln_indices.append(first_soln)
         # start copying
-        g = open('soln_no_{number}_{score}_{date}.txt'.format(number=first_soln+1,
+        g = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=first_soln+1,
                                                               score=lowest_optimal_score,
                                                               date=time.strftime("%m%d%Y")),'r')
         for line in g:
@@ -493,7 +493,7 @@ while count_div_soln < DIVERSE_LIMIT:
                 check_sum.append(each_sum)
         new_div_soln_index = actual_sum.index(max(check_sum))
         div_soln_indices.append(new_div_soln_index)
-        g = open('soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,
+        g = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,
                                                             score=lowest_optimal_score,
                                                             date=time.strftime("%m%d%Y")),'r')
         for line in g:

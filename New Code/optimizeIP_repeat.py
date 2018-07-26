@@ -13,12 +13,6 @@ def optimize_repeat(num_students, num_projects, penalties, MINSTAFF_PROJECTS, MA
 
     # add variable x_i,j matrix for students
     stu_to_proj = prob.add_variable('x', (num_students,num_projects), vtype='binary')
-    # add variable y_i,i' column vector dependent on x_i,j
-    stu_group1 = prob.add_variable('y1', num_students, vtype='binary')
-    stu_group2 = prob.add_variable('y2', num_students, vtype='binary')
-
-    # add variable z_j column vector representing GPA violations, expected to be 0 column vector
-    gpa_violation = prob.add_variable('z', num_projects, vtype='binary')
 
     # constraints setup
     # IP constraints for x (stu_to_proj)
@@ -31,17 +25,15 @@ def optimize_repeat(num_students, num_projects, penalties, MINSTAFF_PROJECTS, MA
     # sum of all entries x_ij over i (student allocated project count) should be 1
     prob.add_list_of_constraints([sum(stu_to_proj[i,:]) == 1 for i in range(num_students)])
 
-    # IP constraint for y (stu_to_proj)
-    # y1[i] = binary variable whether or not student @ index i is w/ first antipref; use antiprefs_dict_1
-    prob.add_list_of_constraints([stu_group1[i] >= stu_to_proj[i,j]+stu_to_proj[antiprefs_dict_1[i],j]-1
+    # IP constraint for anti-preferences: cannot violate
+    prob.add_list_of_constraints([0 >= stu_to_proj[i,j]+stu_to_proj[antiprefs_dict_1[i],j]-1
                                   for j in range(num_projects) for i in antiprefs_dict_1.keys()])
-    # y2[i] = binary variable whether or not student @ index i is w/ second antipref; use antiprefs_dict_2
-    prob.add_list_of_constraints([stu_group2[i] >= stu_to_proj[i,j]+stu_to_proj[antiprefs_dict_2[i],j]-1
+    prob.add_list_of_constraints([0 >= stu_to_proj[i,j]+stu_to_proj[antiprefs_dict_2[i],j]-1
                                   for j in range(num_projects) for i in antiprefs_dict_2.keys()])
 
-    # IP constraint for GPA
+    # IP constraint for GPA: less than 1/2 students with low gpa on a project
     gpa_sub_array = [indic-0.5 for indic in stu_gpa_indic]
-    prob.add_list_of_constraints([gpa_violation[j] >= sum([a*b for a,b in zip(gpa_sub_array,stu_to_proj[:,j])])
+    prob.add_list_of_constraints([0 >= sum([a*b for a,b in zip(gpa_sub_array,stu_to_proj[:,j])])
                                   for j in range(num_projects)])
 
     # IP constraint for citizens, visa holders, and other
@@ -91,11 +83,7 @@ def optimize_repeat(num_students, num_projects, penalties, MINSTAFF_PROJECTS, MA
         prob.add_constraint(sum([stu_to_proj[i,j] for [i,j] in pairs]) <= num_students-1)
 
     # objective function setup
-    prob.set_objective('min',pic.sum([penalty1[i,j]*stu_to_proj[i,j] for i in range(num_students) for j in range(num_projects)])
-                       + pic.sum([stu_group1[i] for i in range(num_students)])
-                       + pic.sum([stu_group2[i] for i in range(num_students)])
-                       + pic.sum([gpa_violation[j] * GPA_COST for j in range(num_projects)])
-                       )
+    prob.set_objective('min',pic.sum([penalty1[i,j]*stu_to_proj[i,j] for i in range(num_students) for j in range(num_projects)]))
 
     # print the problem setup summary - suppressed
     # print(prob)
@@ -104,4 +92,4 @@ def optimize_repeat(num_students, num_projects, penalties, MINSTAFF_PROJECTS, MA
     prob.solve(solver='gurobi', verbose=False)
     # print('status: ' + prob.status)
 
-    return [prob.obj_value(), stu_to_proj, stu_group1, stu_group2]
+    return [prob.obj_value(), stu_to_proj]
