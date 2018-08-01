@@ -12,60 +12,60 @@ does not have active comparison with process3.py
 Author: Daniel Suh, Summer 2018
 """
 
+####################### Project and Student Global Variables ###########################
+
+# Files to read in
+SURVEY_FILE = 'Data/survey_anon17.csv'
+STUDENT_FILE = 'Data/students_anon17.csv'
+
 # Project names
-# TODO: change if project data also changes
-project_names = ['project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
+PROJECT_NAMES = ['project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
                  'project [7]', 'project [8]', 'project [9]', 'project [10]', 'project [11]', 'project [12]',
                  'project [13]', 'project [14]']
+num_projects = len(PROJECT_NAMES)
+# Create index dictionary for IP indexing
 project_index = dict()
-for i in range(len(project_names)):
-    project_index[project_names[i]] = i
-
-# Relevant constants
-# TODO: change if project data also changes
-num_projects = len(project_names)
-num_students = 72
+for i in range(num_projects):
+    project_index[PROJECT_NAMES[i]] = i
 
 # Minimum and maximum number of students per project
-# TODO: change if project data also changes
 MINSTAFF = 5
 MAXSTAFF = 6
-# projects allowed to go below the minimum
-# TODO: change if project data also changes
+
+# Projects allowed to go below the minimum
 MINSTAFF_EXCEPTIONS = {
     # unknown for other years!
 }
-# create dictionary for MINSTAFF_PROJECTS according to exceptions
-MINSTAFF_PROJECTS = {}
-for name in project_names:
+# Create dictionary for min_staff according to exceptions
+minstaff_projects = {}
+for name in PROJECT_NAMES:
     if name not in MINSTAFF_EXCEPTIONS.keys():
-        MINSTAFF_PROJECTS[name] = MINSTAFF
+        minstaff_projects[name] = MINSTAFF
     else:
-        MINSTAFF_PROJECTS[name] = MINSTAFF_EXCEPTIONS[name]
+        minstaff_projects[name] = MINSTAFF_EXCEPTIONS[name]
 
-# projects allowed to go above the maximum
-# TODO: change if project data also changes
+# Projects allowed to go above the maximum
 MAXSTAFF_EXCEPTIONS = {
     # unknown for other years!
 }
-# create dictionary for MAXSTAFF_PROJECTS according to exceptions
-MAXSTAFF_PROJECTS = {}
-for name in project_names:
+# Create dictionary for MAXSTAFF_PROJECTS according to exceptions
+maxstaff_projects = {}
+for name in PROJECT_NAMES:
     if name not in MAXSTAFF_EXCEPTIONS.keys():
-        MAXSTAFF_PROJECTS[name] = MAXSTAFF
+        maxstaff_projects[name] = MAXSTAFF
     else:
-        MAXSTAFF_PROJECTS[name] = MAXSTAFF_EXCEPTIONS[name]
+        maxstaff_projects[name] = MAXSTAFF_EXCEPTIONS[name]
 
-# students locked onto a project 
+# Students locked onto a project 
 LOCKED_STUDENTS = []
 #   '(locked student token)', 'project [#]'), # reason: mentor really wants him/her
 
 
-# students barred from a project 
+# Students barred from a project 
 BARRED_STUDENTS = []
 #    ('(barred student token)', 'project [#]'), # reason: non-US citizenship / visa expiry / other
 
-# Citizenship/visa-affected projects, list by name
+# Citizenship/visa-affected projects
 # US citizens only projects, by name
 CITIZEN_REQ = []
 # US citizens or visa holders only projects
@@ -73,192 +73,98 @@ VISA_REQ = []
 
 # Cost constants
 # note: pref costs in string form due to working with dictionary below
-# caution: must make sure RHS values do not overlap with preference values (hence 1.0 instead of 1)
 PREF_COST_5 = '0'
-PREF_COST_4 = '1.0'
-PREF_COST_3 = '5.0'
+PREF_COST_4 = '1'
+PREF_COST_3 = '5'
 PREF_COST_2 = '1000'
 PREF_COST_1 = '10000'
-ANTIPREF_COST = 100
-NONCITIZEN_COST = 1000
+
+# Low GPA bar
 MIN_GPA = 3.0 # we can change this later to 10th percentile, this is a default
-GPA_COST = 100
 
 # Maximum number of solutions to extract from the integer program
 # this will ask gurobi to find the top # best solutions
-# TODO: revise as desired
 SOLUTION_LIMIT = 100
 
 # Maximum number of solutions to take that are pairwise most diverse
 DIVERSE_LIMIT = 10
 
-# extract data from survey_anon.csv, token used as index column
-# TODO: change csv file AND names
-df = pd.read_csv('Data/survey_anon17.csv', index_col='Token',
-                 names=['id', 'project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
-                        'project [7]', 'project [8]', 'project [9]', 'project [10]', 'project [11]', 'project [12]',
-                        'project [13]', 'project [14]', 'bullets [1]', 'bullets [2]',
-                        'role [1]', 'role [2]', 'role [3]', 'role [4]',
-                        'skills [MS]', 'skills [MD]', 'skills [P]', 'skills [ECE]', 'skills [MM]', 'skills [UOD]',
-                        'major', 'major [comment]', 'comments', 'Email address', 'Token'])
+####################### Reading and Processing the Data ###########################
 
-# extract data from students_anon.csv, ID Number (same as token) used as index column
-# TODO: change csv file
-df2 = pd.read_csv('Data/students_anon17.csv', index_col='ID Number',
-                  names=['Full Name (Last, First)', 'Section Course Number', 'Section Number', 'Section Session Code',
-                         'Section Year', 'ID Number', 'First Name', 'Last Name', 'Gender Code', 'Cumulative GPA',
-                         'Major 1 Code', 'Concentration 1 Code', 'Citizenship Description', 'Visa Description', 'EML1'])
+# Extract data from survey_anon.csv, token used as index column
+df_survey = pd.read_csv(SURVEY_FILE, index_col='Token')
 
-# original of first dataframe
-df_original = df.copy()
+# Extract data from students_anon.csv, ID Number (same as token) used as index column
+df_student = pd.read_csv(STUDENT_FILE, index_col='ID Number')
 
-# drop unnecessary columns for first dataframe
-df.drop('id',axis=1,inplace=True)
-df.drop('major',axis=1,inplace=True)
-df.drop('major [comment]',axis=1,inplace=True)
-df.drop('comments',axis=1,inplace=True)
-df.drop('Email address',axis=1,inplace=True)
-
-# salvage name portion of dataframe for presentation
-df_names = df2.iloc[:,[5,6]].copy()
-# print(df_names)
-
-#drop unnecessary columns for second dataframe
-df2.drop('Full Name (Last, First)',axis=1,inplace=True)
-df2.drop('Section Course Number',axis=1,inplace=True)
-df2.drop('Section Number',axis=1,inplace=True)
-df2.drop('Section Session Code',axis=1,inplace=True)
-df2.drop('Section Year',axis=1,inplace=True)
-df2.drop('First Name',axis=1,inplace=True)
-df2.drop('Last Name',axis=1,inplace=True)
-df2.drop('Concentration 1 Code',axis=1,inplace=True)
-# uncomment this if citizenship should not be considered, see warning below
-# df2.drop('Citizenship Description',axis=1,inplace=True)
-# uncomment this if visa status should not be considered, see warning below
-# df2.drop('Visa Description',axis=1,inplace=True)
-df2.drop('EML1',axis=1,inplace=True)
-df2_demographic = df2.copy()
-# print(df2_demographic)
-
-# create dictionary for penalties
-# TODO: revise dictionaries to reflect penalties above for sensitivity analysis if not already done so
-penalty_dict = {'1': PREF_COST_1, '2': PREF_COST_2, '3': PREF_COST_3, '4': PREF_COST_4, '5': PREF_COST_5}
-# TODO: revise dictionary if value ever gets overwritten - SEE CAUTION ABOVE in sensitivity analysis section
-revise_dict = {PREF_COST_4:str(int(float(PREF_COST_4))),PREF_COST_3:str(int(float(PREF_COST_3)))}
-
-# manipulation of first dataframe to include only preferences
-df_pref=df_original.iloc[:,1:num_projects+1].copy()
-# print(df_pref)
-
-# manipulation of preferences to map to penalties
-df_penalty = df_pref.copy()
-for name in project_names:
-    df_penalty[name].replace(penalty_dict,inplace=True)
-    df_penalty[name].replace(revise_dict,inplace=True)
-# print(df_penalty)
-
-# conversion of pandas dataframe into numpy array
-df_penalty_np = df_penalty.values
-# print(df_penalty_np)
-
-# delete first row as it only has project names, which we don't need
-penalty_matrix = np.delete(df_penalty_np,0,0)
-# print(penalty_matrix)
-
-# convert numpy array of strings to numpy array of floats/ints
-penalties = penalty_matrix.astype(np.int)
-# print(penalties)
-
-# manipulation of dataframe to include only antipreferences
-df_bullet = df_original.iloc[:,num_projects+1:num_projects+3].copy()
-# NaN was a problem so replaced with zeroes
-df_bullet.fillna(0,inplace=True)
-# print(df_bullet)
-
-# obtain tokens from index array
-tokens = df_original.index.tolist()[1:]
+# Create list of student tokens and an index array for IP (use row index for consistency)
+num_students = df_survey.shape[0]
+tokens = []
 token_index = dict()
-for i in range(len(tokens)):
-    token_index[tokens[i]] = i
-# print(tokens)
+i = 0
+for index, _ in df_survey.iterrows():
+    tokens.append(index)
+    token_index[index] = i
+    i += 1
 
-# dictionary of antiprefs; index of token (student shooting bullet) to index of token (student receiving bullet)
+# Create dictionary for penalties
+# TODO: revise dictionaries to reflect penalties above for sensitivity analysis if not already done so
+penalty_dict = {1: PREF_COST_1, 2: PREF_COST_2, 3: PREF_COST_3, 4: PREF_COST_4, 5: PREF_COST_5}
+
+# Manipulation of preferences to map to penalties and store in a numpy array
+df_penalty = df_survey[PROJECT_NAMES].copy()
+for name in PROJECT_NAMES:
+    df_penalty[name].replace(penalty_dict,inplace=True)   
+df_penalty_np = df_penalty.values
+penalties = df_penalty_np.astype(np.int)
+
+# Create dictionary of antiprefs:
+# Index of token (student shooting bullet) to index of token (student receiving bullet)
 antiprefs_dict_1 = {}
 antiprefs_dict_2 = {}
 
 for token in tokens:
-    # track which token we are on using index
     token_row = token_index[token]
     # obtain antipref tokens
-    a1 = df_bullet.at[token, 'bullets [1]']
-    a2 = df_bullet.at[token, 'bullets [2]']
+    a1 = df_survey.at[token, 'bullets [1]']
+    a2 = df_survey.at[token, 'bullets [2]']
     # find the index at which the antiprefs reside
     # revise antiprefs accordingly
-    if a1 != 0:
-        token_col1 = token_index[a1]
-        antiprefs_dict_1[token_row] = token_col1
-    if a2 != 0:
-        token_col2 = token_index[a2]
-        antiprefs_dict_2[token_row] = token_col2
+    if pd.notnull(a1):
+        antiprefs_dict_1[token_row] = token_index[a1]
+    if pd.notnull(a2):
+        antiprefs_dict_2[token_row] = token_index[a2]
 
-# extract other possibly relevant data to build upon
-df_roles = df_original.iloc[:,num_projects+3:num_projects+7].copy()
-# print(df_roles)
+# Get student GPAs and mark if below MIN_GPA
+stu_gpas_np = df_student['Cumulative GPA'].values
+# Optionally alter MIN_GPA to 10th percentile of GPAs
+#MIN_GPA = np.percentile(stu_gpas_np, 10)
+stu_gpa_indic = [1 if indiv_gpa <= MIN_GPA else 0 for indiv_gpa in stu_gpas_np]
 
-df_skills = df_original.iloc[:,num_projects+7:num_projects+13].copy()
-# print(df_skills)
-
-# extract majors
-# if a mix of majors is preferred, can code up a solution using this data
-df2_major = df2_demographic.iloc[:,2].copy()
-# print(df2_major)
-print(df2_major.loc[tokens])
-
-# extract GPAs
-df2_gpa = df2_demographic.iloc[:,1].copy()
-# print(df2_gpa)
-
-# reorder GPAs in the same order as token ID
-gpa = df2_gpa.loc[tokens]
-stu_gpas = [float(indiv_gpa) for indiv_gpa in gpa]
-# print(stu_gpas)
-
-# optionally alter MIN_GPA to 10th percentile of GPAs
-# comment out if unnecessary
-stu_gpas_np = np.array(stu_gpas)
-# MIN_GPA = np.percentile(stu_gpas_np, 10)
-# print(MIN_GPA)
-
-# indicator function for whether a student GPA is < 3.0 or whatever MIN_GPA is set to be
-stu_gpa_indic = [1 if indiv_gpa <= MIN_GPA else 0 for indiv_gpa in stu_gpas]
-# print(stu_gpa_indic)
-
-# extract citizenship description and visa status
-df_ctzn_or_visa = df2_demographic.iloc[:,[3,4]].copy()
-
-# add non-citizens or visa holder banned assignments
-CITIZEN_BANS = []
+# Add non-citizens or visa holder banned assignments
+citizen_bans = []
 for token in tokens:
-    # track which token we are on using index
-    token_row = token_index[token]
-    # obtain citizenship and visa status
-    ctzn_status = df_ctzn_or_visa.at[token, 'Citizenship Description']
-    visa_status = df_ctzn_or_visa.at[token, 'Visa Description']
-    # if not a citizen then ban from citizenship required projects
+    # Obtain citizenship and visa status
+    ctzn_status = df_student.at[token, 'Citizenship Description']
+    visa_status = df_student.at[token, 'Visa Description']
+    # If not a citizen then ban from citizenship required projects
     if ctzn_status != 'Yes':
         for project in CITIZEN_REQ:
-            CITIZEN_BANS.append((token_row,project))
+            citizen_bans.append((token,project))
     if (ctzn_status != 'Yes') and (visa_status != 'Yes'):
         for project in VISA_REQ:
-            CITIZEN_BANS.append((token_row,project))
+            citizen_bans.append((token,project))
+
+######################### Find Top Assignments using the IP ###########################
+            
 # utilize while loop to find solutions without duplicates
 # counter initialized to 0, the actual optimization done in optimizeIP_repeat.py
 count_solutions = 0
 past_solns = []
 scores = []
-prob, stu_to_proj = optimize_repeat(project_index, token_index, penalties, MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
+prob, stu_to_proj = optimize_repeat(project_index, token_index, penalties, minstaff_projects, maxstaff_projects,
                                 antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, LOCKED_STUDENTS,
-                                BARRED_STUDENTS,CITIZEN_BANS)
+                                BARRED_STUDENTS,citizen_bans)
 while count_solutions != SOLUTION_LIMIT:
     prob.solve(solver='gurobi', verbose=False)
     
@@ -284,7 +190,8 @@ while count_solutions != SOLUTION_LIMIT:
 
     # loop to write data in tabular format
     for j in range(num_projects):
-        f.write('\n' + '>> ' + project_names[j] + ' ({index})'.format(index=j+1) + '\n')
+        f.write('\n' + '>> ' + PROJECT_NAMES[j] + ' ({index})'.format(index=j+1) + '\n')
+
         # booleans to check whether at least one student with that skill exists on project team
         check_MS = 0
         check_MD = 0
@@ -297,50 +204,60 @@ while count_solutions != SOLUTION_LIMIT:
         check_PUSH = 0
         check_DOER = 0
         check_PLAN = 0
+
+        # write student info on the project and checks skills/roles
         for i in range(num_students):
             if stu_to_proj[i, j].value[0] == 1:
                 soln_assignment[i] = j
                 curr_token = tokens[i]
-                f.write(df_pref.at[curr_token,project_names[j]] + ' ' # preference code
-                        + df_names.at[curr_token,'First Name'] + ' ' # first name
-                        + df_names.at[curr_token,'Last Name'] + ' ' # last name
-                        + ' '*(24-len(df_names.at[curr_token,'First Name'])-
-                               len(df_names.at[curr_token,'Last Name'])) + '\t' # spacing
-                        + df2_major.loc[tokens][i] +'\t' # major
-                        + df_roles.at[curr_token,'role [1]'] + '\t' # primary role
-                        # + df_roles.at[curr_token,'role [2]'] + '\t' # secondary role, suppressed for now
-                        + "%.5f" % float(df2_gpa.loc[tokens][i]) + '\t' # GPA, rounded to 5 decimals
-                        + '\u005B' + '\u005D' + '\t' # dummy code for violated antipreferences (NOT FUNCTIONAL)
+                antipref_str = '\u005B'
+                if i in antiprefs_dict_1:
+                    antipref_str += tokens[antiprefs_dict_1[i]]
+                    if i in antiprefs_dict_2:
+                        antipref_str += ','+tokens[antiprefs_dict_2[i]]
+                antipref_str += '\u005D'
+                f.write(str(df_survey.at[curr_token,PROJECT_NAMES[j]]) + ' ' # preference code
+                        + df_student.at[curr_token,'First Name'] + ' ' # first name
+                        + df_student.at[curr_token,'Last Name'] + ' ' # last name
+                        + ' '*(24-len(df_student.at[curr_token,'First Name'])-
+                               len(df_student.at[curr_token,'Last Name'])) + '\t' # spacing
+                        + df_survey.at[curr_token,'major'] +'\t' # major
+                        + df_survey.at[curr_token,'role [1]'] + '\t' # primary role
+                        #+ df_roles.at[curr_token,'role [2]'] + '\t' # secondary role, suppressed for now
+                        + "%.5f" % float(df_student.at[curr_token,'Cumulative GPA']) + '\t' # GPA, rounded to 5 decimals
+                        + antipref_str+'\t'
+                        #+ '\u005B' + '\u005D' + '\t' # dummy code for violated antipreferences (NOT FUNCTIONAL)
                         )
-                if df_skills.at[curr_token,'skills [MS]'] == 'Y':
+
+                if df_survey.at[curr_token,'skills [MS]'] == 'Y':
                     f.write('MS' + ' ')
                     check_MS = 1
-                if df_skills.at[curr_token,'skills [MD]'] == 'Y':
+                if df_survey.at[curr_token,'skills [MD]'] == 'Y':
                     f.write('MD' + ' ')
                     check_MD = 1
-                if df_skills.at[curr_token,'skills [P]'] == 'Y':
+                if df_survey.at[curr_token,'skills [P]'] == 'Y':
                     f.write('P' + ' ')
                     check_P = 1
-                if df_skills.at[curr_token,'skills [ECE]'] == 'Y':
+                if df_survey.at[curr_token,'skills [ECE]'] == 'Y':
                     f.write('ECE' + ' ')
                     check_ECE = 1
-                if df_skills.at[curr_token,'skills [MM]'] == 'Y':
+                if df_survey.at[curr_token,'skills [MM]'] == 'Y':
                     f.write('MM' + ' ')
                     check_MM = 1
-                if df_skills.at[curr_token,'skills [UOD]'] == 'Y':
+                if df_survey.at[curr_token,'skills [UOD]'] == 'Y':
                     f.write('UOD' + ' ')
                     check_UOD = 1
-                if df_roles.at[curr_token,'role [1]'] == 'CREAT':
+                if df_survey.at[curr_token,'role [1]'] == 'CREAT':
                     check_CREAT = 1
-                if df_roles.at[curr_token,'role [1]'] == 'PUSH':
+                if df_survey.at[curr_token,'role [1]'] == 'PUSH':
                     check_PUSH = 1
-                if df_roles.at[curr_token,'role [1]'] == 'DOER':
+                if df_survey.at[curr_token,'role [1]'] == 'DOER':
                     check_DOER = 1
-                if df_roles.at[curr_token,'role [1]'] == 'PLAN':
+                if df_survey.at[curr_token,'role [1]'] == 'PLAN':
                     check_PLAN = 1
                 f.write('\n')
         if check_MS + check_MD + check_P + check_ECE + check_MM + check_UOD != 6:
-            warning = project_names[j] + ' is missing specialist(s) in:'
+            warning = PROJECT_NAMES[j] + ' is missing specialist(s) in:'
             if check_MS == 0:
                 warning += ' MS'
             if check_MD == 0:
@@ -408,9 +325,8 @@ for r in range(SOLUTION_LIMIT):
 #print(dist_mtrx)
 
 # find the most diverse solutions based on the distance matrix
-# methodology is to pick solution in dist_mtrx with largest row or column sum (these sums are the same)
-# then pick solution in row/col with largest value of pairwise differences
-# subsequent solutions chosen by picking solutions
+# methodology is to pick solution with largest pairwise distances to those
+# solutions already chosen
 count_div_soln = 0
 div_soln_indices = []
 while count_div_soln < DIVERSE_LIMIT:
@@ -468,18 +384,3 @@ while count_div_soln < DIVERSE_LIMIT:
         f.close()
     count_div_soln += 1
 
-# use dist_mtrx to draw up a graph using networkx to visualize swap distance
-# incomplete/nonfunctional at the moment
-
-# dt = [('len', float)]
-# dist_mtrx = dist_mtrx.view(dt)
-#
-# G = nx.from_numpy_matrix(dist_mtrx)
-# G = nx.relabel_nodes(G, dict(zip(range(len(G.nodes())),string.ascii_uppercase)))
-#
-# G = nx.drawing.nx_agraph.to_agraph(G)
-#
-# G.node_attr.update(color="red", style="filled")
-# G.edge_attr.update(color="blue", width="2.0")
-#
-# G.draw('/tmp/out.png', format='png', prog='neato')

@@ -6,9 +6,9 @@ Integer programming formulation for team selection with PICOS
 Author: Daniel Suh, Summer 2018
 """
 
-def optimize_repeat(project_index, token_index, penalties, MINSTAFF_PROJECTS, MAXSTAFF_PROJECTS,
-                                antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, LOCKED_STUDENTS,
-                                BARRED_STUDENTS,CITIZEN_BANS):
+def optimize_repeat(project_index, token_index, penalties, minstaff_projects,maxstaff_projects,
+                                antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, locked_students,
+                                barred_students,citizen_bans):
 
     num_students = len(token_index)
     num_projects = len(project_index)
@@ -24,11 +24,11 @@ def optimize_repeat(project_index, token_index, penalties, MINSTAFF_PROJECTS, MA
 
     # constraints setup
     # IP constraints for x (stu_to_proj)
-    # sum of all entries x_ij over j (project allocated student count) should be between MINSTAFF and MAXSTAFF
-    prob.add_list_of_constraints([sum(stu_to_proj[:,project_index[proj_name]]) >= MINSTAFF_PROJECTS[proj_name]
-                                      for proj_name in MINSTAFF_PROJECTS.keys()])
-    prob.add_list_of_constraints([sum(stu_to_proj[:,project_index[proj_name]]) <= MAXSTAFF_PROJECTS[proj_name]
-                                      for proj_name in MAXSTAFF_PROJECTS.keys()])
+    # sum of all entries x_ij over j (project allocated student count) should be between minstaff and maxstaff
+    prob.add_list_of_constraints([sum(stu_to_proj[:,project_index[proj_name]]) >= minstaff_projects[proj_name]
+                                      for proj_name in minstaff_projects.keys()])
+    prob.add_list_of_constraints([sum(stu_to_proj[:,project_index[proj_name]]) <= maxstaff_projects[proj_name]
+                                      for proj_name in maxstaff_projects.keys()])
     # this is because exceptions to the minimum/maximum can exist
 
     # sum of all entries x_ij over i (student allocated project count) should be 1
@@ -46,7 +46,7 @@ def optimize_repeat(project_index, token_index, penalties, MINSTAFF_PROJECTS, MA
                                   for j in range(num_projects)])
 
     # constraint for students locked into a project
-    for (token,project_name) in LOCKED_STUDENTS:
+    for (token,project_name) in locked_students:
         # get student and project indices
         stu_index = token_index(token)
         proj_index = project_index(project_name)
@@ -54,7 +54,7 @@ def optimize_repeat(project_index, token_index, penalties, MINSTAFF_PROJECTS, MA
         prob.add_constraint(stu_to_proj[stu_index, proj_index] == 1)
 
     # constraint for students barred from a project
-    for (token,project_name) in BARRED_STUDENTS:
+    for (token,project_name) in barred_students:
         # get student and project indices
         stu_index = token_index(token)
         proj_index = project_index(project_name)
@@ -62,7 +62,7 @@ def optimize_repeat(project_index, token_index, penalties, MINSTAFF_PROJECTS, MA
         prob.add_constraint(stu_to_proj[stu_index,proj_index] == 0)
 
     # constraint for citizenship req projects
-    for (token,project_name) in CITIZEN_BANS:
+    for (token,project_name) in citizen_bans:
         # get student and project indices
         stu_index = token_index(token)
         proj_index = project_index(project_name)
