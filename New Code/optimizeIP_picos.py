@@ -10,6 +10,15 @@ Optimization using integer programming formulation with PICOS
 does not have active comparison with process3.py
 
 Author: Daniel Suh, Summer 2018
+
+To run:
+python optimizeIP_picos.py
+
+The program reads in the survey and student data and generates the top
+SOLUTION_LIMIT solutions to the assignment problem integer program
+(saved to a Results folder). The algorithm then also saves the top
+DIVERSE_LIMIT most diverse options of those generated (saved to a
+DivResults folder).
 """
 
 ####################### Project and Student Global Variables ###########################
@@ -344,13 +353,13 @@ while count_div_soln < DIVERSE_LIMIT:
                                                               score=obj_val,
                                                               date=time.strftime("%m%d%Y")),'r')
 
-        f = open('div_soln_no_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,score=obj_val,
+        f = open('DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,score=obj_val,
                                                               date=time.strftime("%m%d%Y")),'w+')
         for line in g:
             f.write(line)
         g.close()
         print('Diverse solution saved as file ' +
-              'div_soln_no_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,
+              'DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,
                                                                score=obj_val,
                                                                date=time.strftime("%m%d%Y")))
         f.close()
@@ -372,13 +381,13 @@ while count_div_soln < DIVERSE_LIMIT:
         g = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,
                                                             score=obj_val, date=time.strftime("%m%d%Y")),'r')
 
-        f = open('div_soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,score=obj_val,
+        f = open('DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,score=obj_val,
                                                               date=time.strftime("%m%d%Y")),'w+')
         for line in g:
             f.write(line)
         g.close()
         print('Diverse solution saved as file ' +
-              'div_soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+ 1,
+              'DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+ 1,
                                                                score=obj_val,
                                                                date=time.strftime("%m%d%Y")))
         f.close()
