@@ -5,6 +5,8 @@ from optimizeIP_repeat import optimize_repeat
 import time
 import string
 
+from fuzzy3 import FuzzyDict
+
 """
 Optimization using integer programming formulation with PICOS
 does not have active comparison with process3.py
@@ -24,14 +26,19 @@ DivResults folder).
 ####################### Project and Student Global Variables ###########################
 
 # Files to read in
-SURVEY_FILE = 'Data/survey_anon17.csv'
-STUDENT_FILE = 'Data/students_anon17.csv'
+SURVEY_FILE = 'Data/survey.csv'
+STUDENT_FILE = 'Data/students.csv'
 
 # Project names
-PROJECT_NAMES = ['project [1]', 'project [2]', 'project [3]', 'project [4]', 'project [5]', 'project [6]',
-                 'project [7]', 'project [8]', 'project [9]', 'project [10]', 'project [11]', 'project [12]',
-                 'project [13]', 'project [14]']
+PROJECT_NAMES = ['Aerodyne', 'Amazon Robotics', 'Boeing', 'Boston Scientific',
+                 'Dassault', 'Ford', 'Gates', 'GE Healthcare', 'Iron Mountain',
+                 'Microsoft','Santos','Toyota','Watts']
+
 num_projects = len(PROJECT_NAMES)
+SURVEY_PROJECT_COLS = []
+for j in range(num_projects):
+    SURVEY_PROJECT_COLS.append('project ['+str(j+1)+']')
+
 # Create index dictionary for IP indexing
 project_index = dict()
 for i in range(num_projects):
@@ -39,12 +46,13 @@ for i in range(num_projects):
 
 # Minimum and maximum number of students per project
 MINSTAFF = 5
-MAXSTAFF = 6
+MAXSTAFF = 5
 
 # Projects allowed to go below the minimum
-MINSTAFF_EXCEPTIONS = {
-    # unknown for other years!
-}
+MINSTAFF_EXCEPTIONS = {'Aerodyne': 4, 'Boeing': 4, 'Boston Scientific': 4,
+                       'Dassault': 4, 'Ford': 4, 'Microsoft': 4, 'Santos': 4,
+                       'Watts': 4}
+
 # Create dictionary for min_staff according to exceptions
 minstaff_projects = {}
 for name in PROJECT_NAMES:
@@ -66,13 +74,13 @@ for name in PROJECT_NAMES:
         maxstaff_projects[name] = MAXSTAFF_EXCEPTIONS[name]
 
 # Students locked onto a project 
-LOCKED_STUDENTS = []
-#   '(locked student token)', 'project [#]'), # reason: mentor really wants him/her
+LOCKED_STUDENTS = [('Lauren Gullard','Aerodyne')]
+#   ('student name', 'project name'), # reason: mentor really wants him/her
 
 
 # Students barred from a project 
-BARRED_STUDENTS = []
-#    ('(barred student token)', 'project [#]'), # reason: non-US citizenship / visa expiry / other
+BARRED_STUDENTS = [('Arpam Rao', 'Aerodyne')]
+#    ('student name', 'project name'), # reason: non-US citizenship / visa expiry / other
 
 # Citizenship/visa-affected projects
 # US citizens only projects, by name
@@ -101,17 +109,24 @@ DIVERSE_LIMIT = 10
 ####################### Reading and Processing the Data ###########################
 
 # Extract data from survey_anon.csv, token used as index column
-df_survey = pd.read_csv(SURVEY_FILE, index_col='Token')
+df_survey = pd.read_csv(SURVEY_FILE, index_col='Token', sep=",")
 
 # Extract data from students_anon.csv, ID Number (same as token) used as index column
-df_student = pd.read_csv(STUDENT_FILE, index_col='ID Number')
+df_student = pd.read_csv(STUDENT_FILE, index_col='ID Number', sep=",")
+df_student= df_student.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
 
 # Create list of student tokens and an index array for IP (use row index for consistency)
+# Also create a fuzzy dictionary from student name to token
 num_students = df_survey.shape[0]
 tokens = []
 token_index = dict()
+name_fuzzy = FuzzyDict(cutoff=0.6)
 i = 0
-for index, _ in df_survey.iterrows():
+for index, _ in df_student.iterrows():
+    first = df_student.at[index, 'First Name']
+    last = df_student.at[index, 'Last Name']
+    name = first+" "+last
+    name_fuzzy[name] = index
     tokens.append(index)
     token_index[index] = i
     i += 1
@@ -121,11 +136,13 @@ for index, _ in df_survey.iterrows():
 penalty_dict = {1: PREF_COST_1, 2: PREF_COST_2, 3: PREF_COST_3, 4: PREF_COST_4, 5: PREF_COST_5}
 
 # Manipulation of preferences to map to penalties and store in a numpy array
-df_penalty = df_survey[PROJECT_NAMES].copy()
-for name in PROJECT_NAMES:
-    df_penalty[name].replace(penalty_dict,inplace=True)   
-df_penalty_np = df_penalty.values
-penalties = df_penalty_np.astype(np.int)
+df_penalty = np.zeros((num_students,num_projects))
+for token in tokens:
+    for j in range(num_projects):
+        project = SURVEY_PROJECT_COLS[j]
+        df_penalty[token_index[token],j] = penalty_dict[df_survey.at[token,project]]   
+penalties = df_penalty.astype(np.int)
+#print(penalties)
 
 # Create dictionary of antiprefs:
 # Index of token (student shooting bullet) to index of token (student receiving bullet)
@@ -140,9 +157,9 @@ for token in tokens:
     # find the index at which the antiprefs reside
     # revise antiprefs accordingly
     if pd.notnull(a1):
-        antiprefs_dict_1[token_row] = token_index[a1]
+        antiprefs_dict_1[token_row] = token_index[name_fuzzy[a1]]
     if pd.notnull(a2):
-        antiprefs_dict_2[token_row] = token_index[a2]
+        antiprefs_dict_2[token_row] = token_index[name_fuzzy[a2]]
 
 # Get student GPAs and mark if below MIN_GPA
 stu_gpas_np = df_student['Cumulative GPA'].values
@@ -152,28 +169,30 @@ stu_gpa_indic = [1 if indiv_gpa <= MIN_GPA else 0 for indiv_gpa in stu_gpas_np]
 
 # Add non-citizens or visa holder banned assignments
 citizen_bans = []
-for token in tokens:
-    # Obtain citizenship and visa status
-    ctzn_status = df_student.at[token, 'Citizenship Description']
-    visa_status = df_student.at[token, 'Visa Description']
-    # If not a citizen then ban from citizenship required projects
-    if ctzn_status != 'Yes':
-        for project in CITIZEN_REQ:
-            citizen_bans.append((token,project))
-    if (ctzn_status != 'Yes') and (visa_status != 'Yes'):
-        for project in VISA_REQ:
-            citizen_bans.append((token,project))
+#for token in tokens:
+#    # Obtain citizenship and visa status
+#    ctzn_status = df_student.at[token, 'Citizenship Description']
+#    visa_status = df_student.at[token, 'Visa Description']
+#    # If not a citizen then ban from citizenship required projects
+#    if ctzn_status != 'UNITED STATES':
+#        for project in CITIZEN_REQ:
+#            citizen_bans.append((token,project))
+#    if (ctzn_status != 'UNITED STATES') and (visa_status != 'Blank'):
+#        for project in VISA_REQ:
+#            citizen_bans.append((token,project))
 
 ######################### Find Top Assignments using the IP ###########################
             
 # utilize while loop to find solutions without duplicates
 # counter initialized to 0, the actual optimization done in optimizeIP_repeat.py
+soln_time = time.time()
 count_solutions = 0
 past_solns = []
 scores = []
-prob, stu_to_proj = optimize_repeat(project_index, token_index, penalties, minstaff_projects, maxstaff_projects,
+prob, stu_to_proj = optimize_repeat(project_index, token_index, name_fuzzy, penalties, minstaff_projects, maxstaff_projects,
                                 antiprefs_dict_1, antiprefs_dict_2, stu_gpa_indic, LOCKED_STUDENTS,
                                 BARRED_STUDENTS,citizen_bans)
+
 while count_solutions != SOLUTION_LIMIT:
     prob.solve(solver='gurobi', verbose=False)
     
@@ -182,10 +201,10 @@ while count_solutions != SOLUTION_LIMIT:
     scores.append(obj_val)
 
     # create a new solution file txt
-    f = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
-                                                          score=obj_val, date=time.strftime("%m%d%Y")),'w+')
+    f = open('Results/soln_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
+                                                          score=obj_val, date=soln_time),'w+')
 
-    f.write('soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,score=obj_val, date=time.strftime("%m%d%Y")))
+    f.write('soln_{number}_{score}_{date}.txt'.format(number=count_solutions+1,score=obj_val, date=soln_time))
     f.write('\n')
 
     # list of strings containing warnings about skill coverage on project
@@ -221,15 +240,19 @@ while count_solutions != SOLUTION_LIMIT:
                 curr_token = tokens[i]
                 antipref_str = '\u005B'
                 if i in antiprefs_dict_1:
-                    antipref_str += tokens[antiprefs_dict_1[i]]
+                    name1 = df_survey.at[curr_token,'bullets [1]']
+                    if stu_to_proj[token_index[name_fuzzy[name1]],j].value[0] == 1:
+                        antipref_str += name1
                     if i in antiprefs_dict_2:
-                        antipref_str += ','+tokens[antiprefs_dict_2[i]]
+                        name2 = df_survey.at[curr_token,'bullets [2]']
+                        if stu_to_proj[token_index[name_fuzzy[name2]],j].value[0] == 1:
+                            antipref_str += ","+name2
                 antipref_str += '\u005D'
-                f.write(str(df_survey.at[curr_token,PROJECT_NAMES[j]]) + ' ' # preference code
-                        + df_student.at[curr_token,'First Name'] + ' ' # first name
-                        + df_student.at[curr_token,'Last Name'] + ' ' # last name
-                        + ' '*(24-len(df_student.at[curr_token,'First Name'])-
-                               len(df_student.at[curr_token,'Last Name'])) + '\t' # spacing
+                f.write(str(df_survey.at[curr_token,SURVEY_PROJECT_COLS[j]]) + ' ' # preference code
+                        + df_student.at[curr_token,'First Name'].strip() + ' ' # first name
+                        + df_student.at[curr_token,'Last Name'].strip() + ' ' # last name
+                        + ' '*(24-len(df_student.at[curr_token,'First Name'].strip())-
+                               len(df_student.at[curr_token,'Last Name'].strip())) + '\t' # spacing
                         + df_survey.at[curr_token,'major'] +'\t' # major
                         + df_survey.at[curr_token,'role [1]'] + '\t' # primary role
                         #+ df_roles.at[curr_token,'role [2]'] + '\t' # secondary role, suppressed for now
@@ -297,7 +320,7 @@ while count_solutions != SOLUTION_LIMIT:
             role_diversity += 8
         if count == 1:
             role_diversity += 16
-    f.write('\n' + 'Overall role diversity score for this allocation is ' + str(role_diversity) + '.' + '\n')
+    #f.write('\n' + 'Overall role diversity score for this allocation is ' + str(role_diversity) + '.' + '\n')
 
     # loop to warn faculty of skill imbalance on a team
     if len(skill_warnings) != 0:
@@ -307,12 +330,12 @@ while count_solutions != SOLUTION_LIMIT:
                 + ' reconsideration/swap may be necessary.' + '\n')
     for warn in skill_warnings:
         f.write(warn+'\n')
+    f.write('\n')
 
     # close instance of file
-    print()
     print('Solution saved as file ' +
-          'Results/soln_no_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
-                                                       score=obj_val, date=time.strftime("%m%d%Y")))
+          'Results/soln_{number}_{score}_{date}.txt'.format(number=count_solutions+1,
+                                                       score=obj_val, date = soln_time))
     f.close()
 
     past_solns.append(soln_assignment)
@@ -341,7 +364,7 @@ div_soln_indices = []
 while count_div_soln < DIVERSE_LIMIT:
 
     # if we are to choose our first solution
-    if count_div_soln == 1:
+    if count_div_soln == 0:
         # sums over rows
         sums = np.sum(dist_mtrx, axis = 0).tolist()
         # max sum over this new array
@@ -349,19 +372,19 @@ while count_div_soln < DIVERSE_LIMIT:
         obj_val = scores[first_soln]
         div_soln_indices.append(first_soln)
         # start copying
-        g = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=first_soln+1,
+        g = open('Results/soln_{number}_{score}_{date}.txt'.format(number=first_soln+1,
                                                               score=obj_val,
-                                                              date=time.strftime("%m%d%Y")),'r')
+                                                              date=soln_time),'r')
 
-        f = open('DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,score=obj_val,
-                                                              date=time.strftime("%m%d%Y")),'w+')
+        f = open('DivResults/div_soln_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,score=obj_val,
+                                                              date=soln_time),'w+')
         for line in g:
             f.write(line)
         g.close()
         print('Diverse solution saved as file ' +
-              'DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,
+              'DivResults/div_soln_{number}_{score}_{date}.txt'.format(number=count_div_soln+1,
                                                                score=obj_val,
-                                                               date=time.strftime("%m%d%Y")))
+                                                               date=soln_time))
         f.close()
         
     # all other solutions rely on counting max sum of diff from previous chosen solutions
@@ -375,21 +398,22 @@ while count_div_soln < DIVERSE_LIMIT:
             actual_sum.append(each_sum)
             if soln_check not in div_soln_indices:
                 check_sum.append(each_sum)
+
         new_div_soln_index = actual_sum.index(max(check_sum))
         obj_val = scores[new_div_soln_index]
         div_soln_indices.append(new_div_soln_index)
-        g = open('Results/soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,
-                                                            score=obj_val, date=time.strftime("%m%d%Y")),'r')
+        g = open('Results/soln_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,
+                                                            score=obj_val, date=soln_time),'r')
 
-        f = open('DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,score=obj_val,
-                                                              date=time.strftime("%m%d%Y")),'w+')
+        f = open('DivResults/div_soln_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+1,score=obj_val,
+                                                              date=soln_time),'w+')
         for line in g:
             f.write(line)
         g.close()
         print('Diverse solution saved as file ' +
-              'DivResults/div_soln_no_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+ 1,
+              'DivResults/div_soln_{number}_{score}_{date}.txt'.format(number=new_div_soln_index+ 1,
                                                                score=obj_val,
-                                                               date=time.strftime("%m%d%Y")))
+                                                               date=soln_time))
         f.close()
     count_div_soln += 1
 
