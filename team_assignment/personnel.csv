@@ -1,0 +1,5 @@
+name,project1,project2,conflicts
+Alice,5,1,"John,Mary"
+John,1,5,Alice
+Mary,4,4,
+Ben,5,5,
